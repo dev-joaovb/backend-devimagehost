@@ -459,3 +459,5 @@ app.post("/api/contact", async (req, res) => {
 
 // Inicia servidor
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
+export default app;
