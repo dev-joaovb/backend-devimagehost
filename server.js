@@ -181,7 +181,9 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/upload", authenticateToken, upload.single("image"), async (req, res) => {
   try {
     const { file_type, dimensions } = req.body;
-    const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+    // const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+    const fileUrl = `${process.env.BASE_URL || "http://localhost:"+PORT}/uploads/${req.file.filename}`;
+
 
     const image = await prisma.image.create({
       data: {
