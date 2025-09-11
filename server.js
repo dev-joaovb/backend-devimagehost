@@ -5,13 +5,13 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
-//import pool from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import fs from "fs";
+
 dotenv.config();
 
 const app = express();
@@ -19,6 +19,9 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const prisma = new PrismaClient();
 
+// Base URLs
+const FRONTEND_URL = "https://devimagehost.netlify.app";
+const BASE_URL = process.env.BASE_URL || "https://devimagehost.onrender.com";
 
 // Config CORS
 app.use(cors());
@@ -27,18 +30,15 @@ app.use(cors());
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER, // seu email
-    pass: process.env.EMAIL_PASS, // senha ou App Password
+    user: process.env.EMAIL_USER, 
+    pass: process.env.EMAIL_PASS,
   },
 });
-
-
 
 // Config pasta uploads
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// garante que a pasta uploads exista
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
@@ -50,30 +50,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-
 // Middleware
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use(express.urlencoded({ extended: true }));
 
-// 📌 Rota de cadastro
-// app.post("/api/signup", async (req, res) => {
-//   try {
-//     const { name, email, password } = req.body;
-//     const hashedPass = await bcrypt.hash(password, 10);
-
-//     const user = await prisma.user.create({
-//       data: { name, email, password: hashedPass },
-//       select: { id: true, name: true, email: true },
-//     });
-
-//     res.json({ message: "Usuário criado com sucesso", user });
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-// 📌 Rota de cadastro
+// 📌 Cadastro
 app.post("/api/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -82,19 +64,13 @@ app.post("/api/signup", async (req, res) => {
     if (existing) return res.status(400).json({ error: "Email already registered" });
 
     const hashedPass = await bcrypt.hash(password, 10);
-
     const verifyToken = crypto.randomBytes(32).toString("hex");
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPass,
-        verifyToken,
-      },
+    await prisma.user.create({
+      data: { name, email, password: hashedPass, verifyToken },
     });
 
-    const verifyUrl = `https://devimagehost.netlify.app/verify-email?token=${verifyToken}`;
+    const verifyUrl = `${FRONTEND_URL}/verify-email?token=${verifyToken}`;
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -113,8 +89,7 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
-
-// 📌 Rota de verificação de email
+// 📌 Verificação de email
 app.get("/api/verify-email", async (req, res) => {
   try {
     const { token } = req.query;
@@ -133,27 +108,7 @@ app.get("/api/verify-email", async (req, res) => {
   }
 });
 
-
-// 📌 Rota de login
-// app.post("/api/login", async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-//     const user = await prisma.user.findUnique({ where: { email } });
-
-//     if (!user) return res.status(401).json({ error: "Usuário não encontrado" });
-
-//     const validPass = await bcrypt.compare(password, user.password);
-//     if (!validPass) return res.status(401).json({ error: "Senha incorreta" });
-
-//     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1h" });
-
-//     res.json({ message: "Login bem-sucedido", token });
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-// 📌 Rota de login
+// 📌 Login
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -168,7 +123,7 @@ app.post("/api/login", async (req, res) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(400).json({ error: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1h" });
 
     res.json({ token });
   } catch (err) {
@@ -176,14 +131,11 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-
-// 📌 Upload de imagem (protegida)
+// 📌 Upload de imagem
 app.post("/api/upload", authenticateToken, upload.single("image"), async (req, res) => {
   try {
     const { file_type, dimensions } = req.body;
-    // const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
-    const fileUrl = `${process.env.BASE_URL || "https://devimagehost.netlify.app"}/uploads/${req.file.filename}`;
-
+    const fileUrl = `${BASE_URL}/uploads/${req.file.filename}`;
 
     const image = await prisma.image.create({
       data: {
@@ -201,25 +153,15 @@ app.post("/api/upload", authenticateToken, upload.single("image"), async (req, r
   }
 });
 
-
-// 📌 Listar imagens do usuário logado (revisado)
+// 📌 Listar imagens
 app.get("/api/my-images", authenticateToken, async (req, res) => {
   try {
     const images = await prisma.image.findMany({
       where: { userId: req.user.id },
       orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        filename: true,
-        fileUrl: true,
-        fileType: true,
-        dimensions: true,
-      },
     });
-
     res.json({ images });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -233,7 +175,7 @@ app.delete("/api/images/:id", authenticateToken, async (req, res) => {
       where: { id: Number(id), userId: req.user.id },
     });
 
-    if (!img) return res.status(404).json({ error: "Imagem não encontrada ou não autorizada" });
+    if (!img) return res.status(404).json({ error: "Imagem não encontrada" });
 
     await prisma.image.delete({ where: { id: img.id } });
 
@@ -243,89 +185,66 @@ app.delete("/api/images/:id", authenticateToken, async (req, res) => {
   }
 });
 
-
-
-// 📌 Atualizar nome do arquivo (somente nome, mantendo extensão)
+// 📌 Renomear imagem
 app.put("/api/images/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { newFilename } = req.body;
 
-    if (!newFilename || newFilename.trim() === "") {
-      return res.status(400).json({ error: "Novo nome não pode ser vazio" });
-    }
-
-    // Busca a imagem
     const image = await prisma.image.findFirst({
       where: { id: Number(id), userId: req.user.id },
     });
 
-    if (!image) {
-      return res.status(404).json({ error: "Imagem não encontrada ou não autorizada" });
-    }
+    if (!image) return res.status(404).json({ error: "Imagem não encontrada" });
 
-    // Extrai extensão original
-    const ext = path.extname(image.filename); // exemplo: ".png"
-    const safeName = newFilename.replace(/\.[^/.]+$/, ""); // remove extensão se usuário digitou
-
+    const ext = path.extname(image.filename);
+    const safeName = newFilename.replace(/\.[^/.]+$/, "");
     const finalFilename = safeName + ext;
 
-    const oldPath = path.join(__dirname, "uploads", image.filename);
-    const newPath = path.join(__dirname, "uploads", finalFilename);
+    const oldPath = path.join(uploadDir, image.filename);
+    const newPath = path.join(uploadDir, finalFilename);
 
-    // Se já existir arquivo com o mesmo nome, retorna erro
     if (fs.existsSync(newPath)) {
       return res.status(400).json({ error: "Já existe um arquivo com esse nome" });
     }
 
-    // Renomeia fisicamente
     fs.renameSync(oldPath, newPath);
 
-    // Atualiza banco
     const updated = await prisma.image.update({
       where: { id: image.id },
       data: {
         filename: finalFilename,
-        fileUrl: `https://devimagehost.netlify.app/uploads/${finalFilename}`,
+        fileUrl: `${BASE_URL}/uploads/${finalFilename}`,
       },
     });
 
     res.json({ message: "Arquivo renomeado com sucesso!", image: updated });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-
-
-// 📌 Atualizar dados da conta
+// 📌 Conta do usuário
 app.put("/api/account", authenticateToken, async (req, res) => {
   try {
     const { name, email } = req.body;
-
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data: { name, email },
       select: { id: true, name: true, email: true },
     });
-
     res.json({ message: "Conta atualizada com sucesso", user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 📌 Obter dados da conta logada
 app.get("/api/account", authenticateToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { id: true, name: true, email: true },
     });
-
-    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
-
     res.json({ user });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -342,7 +261,6 @@ app.put("/api/account/password", authenticateToken, async (req, res) => {
     if (!validPass) return res.status(401).json({ error: "Senha atual incorreta" });
 
     const hashedPass = await bcrypt.hash(newPass, 10);
-
     await prisma.user.update({
       where: { id: req.user.id },
       data: { password: hashedPass },
@@ -354,8 +272,7 @@ app.put("/api/account/password", authenticateToken, async (req, res) => {
   }
 });
 
-
-// 📌 Solicitar reset de senha
+// 📌 Reset de senha
 app.post("/api/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
@@ -363,19 +280,15 @@ app.post("/api/forgot-password", async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // gera token único
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenExpiry = new Date(Date.now() + 1000 * 60 * 15); // expira em 15 min
+    const resetTokenExpiry = new Date(Date.now() + 1000 * 60 * 15);
 
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        resetToken,
-        resetTokenExpiry,
-      },
+      data: { resetToken, resetTokenExpiry },
     });
 
-    const resetUrl = `https://devimagehost.netlify.app/reset-password?token=${resetToken}`;
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -383,7 +296,6 @@ app.post("/api/forgot-password", async (req, res) => {
       subject: "Password Reset Request",
       html: `
         <p>You requested a password reset.</p>
-        <p>Click the link below to reset your password:</p>
         <a href="${resetUrl}">${resetUrl}</a>
         <p>This link expires in 15 minutes.</p>
       `,
@@ -395,8 +307,6 @@ app.post("/api/forgot-password", async (req, res) => {
   }
 });
 
-
-// 📌 Resetar senha com token
 app.post("/api/reset-password", async (req, res) => {
   try {
     const { token, newPass } = req.body;
@@ -404,7 +314,7 @@ app.post("/api/reset-password", async (req, res) => {
     const user = await prisma.user.findFirst({
       where: {
         resetToken: token,
-        resetTokenExpiry: { gte: new Date() }, // token ainda válido
+        resetTokenExpiry: { gte: new Date() },
       },
     });
 
@@ -414,11 +324,7 @@ app.post("/api/reset-password", async (req, res) => {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        password: hashedPass,
-        resetToken: null,
-        resetTokenExpiry: null,
-      },
+      data: { password: hashedPass, resetToken: null, resetTokenExpiry: null },
     });
 
     res.json({ message: "Password reset successful" });
@@ -427,18 +333,14 @@ app.post("/api/reset-password", async (req, res) => {
   }
 });
 
-
-// 📌 Rota de contato
+// 📌 Contato
 app.post("/api/contact", async (req, res) => {
   try {
-    console.log("Body recebido:", req.body); // 👈 debug
     const { c_name, c_email, c_message } = req.body;
-
     if (!c_name || !c_email || !c_message) {
       return res.status(400).json({ error: "Todos os campos são obrigatórios" });
     }
 
-    // Email para você
     await transporter.sendMail({
       from: `"DevImageHost Contact" <${process.env.EMAIL_USER}>`,
       to: "sejoaovb@gmail.com",
@@ -452,12 +354,9 @@ app.post("/api/contact", async (req, res) => {
 
     res.json({ message: "Mensagem enviada com sucesso!" });
   } catch (err) {
-    console.error("Erro ao enviar email:", err);
-    res.status(500).json({ error: "Erro ao enviar a mensagem. Tente novamente." });
+    res.status(500).json({ error: err.message });
   }
 });
-
-
 
 // Inicia servidor
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
