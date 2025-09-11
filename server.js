@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
-import pool from "./db.js";
+//import pool from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
