@@ -94,7 +94,7 @@ app.post("/api/signup", async (req, res) => {
       },
     });
 
-    const verifyUrl = `https://devimagehost.onrender.com/verify-email?token=${verifyToken}`;
+    const verifyUrl = `https://devimagehost.netlify.app/verify-email?token=${verifyToken}`;
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -182,7 +182,7 @@ app.post("/api/upload", authenticateToken, upload.single("image"), async (req, r
   try {
     const { file_type, dimensions } = req.body;
     // const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
-    const fileUrl = `${process.env.BASE_URL || "https://devimagehost.onrender.com"}/uploads/${req.file.filename}`;
+    const fileUrl = `${process.env.BASE_URL || "https://devimagehost.netlify.app"}/uploads/${req.file.filename}`;
 
 
     const image = await prisma.image.create({
@@ -286,7 +286,7 @@ app.put("/api/images/:id", authenticateToken, async (req, res) => {
       where: { id: image.id },
       data: {
         filename: finalFilename,
-        fileUrl: `https://devimagehost.onrender.com/uploads/${finalFilename}`,
+        fileUrl: `https://devimagehost.netlify.app/uploads/${finalFilename}`,
       },
     });
 
@@ -375,7 +375,7 @@ app.post("/api/forgot-password", async (req, res) => {
       },
     });
 
-    const resetUrl = `https://devimagehost.onrender.com/reset-password?token=${resetToken}`;
+    const resetUrl = `https://devimagehost.netlify.app/reset-password?token=${resetToken}`;
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
